@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Perfil de Prueba LAZU</title>
+    <meta name="description" content="Perfil digital de prueba para validar el tracking de LAZU." />
+    <style>
+      :root {
+        --navy: #023047;
+        --orange: #fb8500;
+        --white: #ffffff;
+        --ink: #0f1c24;
+        --muted: #5b6b75;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(160deg, var(--navy) 0%, #05496a 100%);
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+      }
+      .card {
+        width: 100%;
+        max-width: 400px;
+        background: var(--white);
+        border-radius: 24px;
+        padding: 32px 24px 24px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+        text-align: center;
+      }
+      .avatar {
+        width: 88px;
+        height: 88px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        background: var(--orange);
+        color: var(--navy);
+        display: grid;
+        place-items: center;
+        font-size: 34px;
+        font-weight: 800;
+      }
+      h1 { margin: 0; font-size: 24px; color: var(--navy); }
+      .tagline { margin: 6px 0 24px; color: var(--muted); font-size: 14px; }
+      .actions { display: grid; gap: 10px; }
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 0;
+        cursor: pointer;
+        font-family: inherit;
+        transition: transform 0.08s ease, filter 0.15s ease;
+      }
+      .btn:active { transform: scale(0.98); }
+      .btn:hover { filter: brightness(0.95); }
+      .btn-primary { background: var(--orange); color: var(--navy); }
+      .btn-dark { background: var(--navy); color: var(--white); }
+      .btn-light { background: #eef3f6; color: var(--navy); }
+      .social { display: flex; justify-content: center; gap: 12px; margin-top: 18px; }
+      .social a { color: var(--navy); font-size: 13px; font-weight: 600; text-decoration: none; }
+      footer { margin-top: 24px; font-size: 11px; color: var(--muted); }
+      footer strong { color: var(--navy); }
+      .status { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 1em; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="avatar" aria-hidden="true">L</div>
+      <h1>Perfil de Prueba LAZU</h1>
+      <p class="tagline">Tarjeta digital para probar el tracking de eventos.</p>
+
+      <div class="actions">
+        <!-- Cada botón solo necesita el atributo data-lazu-event. -->
+        <a class="btn btn-primary" data-lazu-event="whatsapp_click"
+           href="https://wa.me/5210000000000?text=Hola%2C%20vi%20tu%20perfil%20LAZU" target="_blank" rel="noopener">
+          WhatsApp
+        </a>
+        <a class="btn btn-dark" data-lazu-event="phone_click" href="tel:+520000000000">
+          Llamar
+        </a>
+        <a class="btn btn-light" data-lazu-event="maps_click"
+           href="https://www.google.com/maps/search/?api=1&query=Z%C3%B3calo%20CDMX" target="_blank" rel="noopener">
+          Cómo llegar (Maps)
+        </a>
+        <a class="btn btn-light" data-lazu-event="website_click" href="https://lazu.bio" target="_blank" rel="noopener">
+          Sitio web
+        </a>
+        <button class="btn btn-light" type="button" id="save-contact" data-lazu-event="contact_save">
+          Guardar contacto
+        </button>
+      </div>
+
+      <nav class="social" aria-label="Redes sociales">
+        <a data-lazu-event="social_click" data-lazu-label="instagram" href="https://instagram.com/" target="_blank" rel="noopener">Instagram</a>
+        <a data-lazu-event="social_click" data-lazu-label="facebook" href="https://facebook.com/" target="_blank" rel="noopener">Facebook</a>
+        <a data-lazu-event="social_click" data-lazu-label="tiktok" href="https://tiktok.com/" target="_blank" rel="noopener">TikTok</a>
+      </nav>
+
+      <p class="status" id="status" aria-live="polite"></p>
+      <footer>Perfil digital por <strong>LAZU</strong></footer>
+    </main>
+
+    <script>
+      // Contacto en formato vCard, generado en el navegador (no se envía a ningún servidor).
+      document.getElementById("save-contact").addEventListener("click", function () {
+        var vcard = [
+          "BEGIN:VCARD",
+          "VERSION:3.0",
+          "FN:Perfil de Prueba LAZU",
+          "ORG:LAZU",
+          "TEL;TYPE=CELL:+520000000000",
+          "URL:https://lazu.bio",
+          "END:VCARD",
+        ].join("\r\n");
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([vcard], { type: "text/vcard" }));
+        link.download = "perfil-prueba-lazu.vcf";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        document.getElementById("status").textContent = "Contacto descargado.";
+      });
+    </script>
+
+    <!-- ===== LAZU tracker · pegar antes de </body> ===== -->
+    <script>
+      const LAZU_PROFILE_ID = "test-profile";
+      const LAZU_ENDPOINT = "http://localhost:3000/api/track";
+      /* LAZU-TRACKER:START */
+      /*! LAZU standalone tracker v1 · sin dependencias · https://lazu.bio */
+      (function () {
+        "use strict";
+
+        // Configuración leída de las constantes que el diseñador declara antes de este bloque.
+        var PROFILE = typeof LAZU_PROFILE_ID !== "undefined" ? String(LAZU_PROFILE_ID) : "";
+        var ENDPOINT =
+          typeof LAZU_ENDPOINT !== "undefined" ? String(LAZU_ENDPOINT) : "https://app.lazu.bio/api/track";
+        var AUTO_PAGE_VIEW = typeof LAZU_AUTO_PAGE_VIEW !== "undefined" ? !!LAZU_AUTO_PAGE_VIEW : true;
+
+        var STORAGE_KEY = "lazu_session_id";
+        var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+        var EVENTS = [
+          "page_view",
+          "whatsapp_click",
+          "phone_click",
+          "maps_click",
+          "social_click",
+          "website_click",
+          "contact_save",
+          "catalog_view",
+          "custom",
+        ];
+
+        function randomId() {
+          if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return "anon-" + window.crypto.randomUUID().replace(/-/g, "");
+          }
+          var bytes = new Uint8Array(16);
+          if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+          else for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+          return "anon-" + Array.prototype.map.call(bytes, function (b) {
+            return ("0" + b.toString(16)).slice(-2);
+          }).join("");
+        }
+
+        // Identificador anónimo aleatorio. No contiene datos personales.
+        // Se guarda en localStorage durante 30 días; si el navegador pide no ser
+        // rastreado (Global Privacy Control / Do Not Track) o localStorage no está
+        // disponible, se usa un id nuevo por cada carga de página.
+        function sessionId() {
+          var optOut = navigator.globalPrivacyControl === true || navigator.doNotTrack === "1";
+          if (!optOut) {
+            try {
+              var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+              if (stored && typeof stored.id === "string" && stored.exp > Date.now()) return stored.id;
+              var fresh = { id: randomId(), exp: Date.now() + SESSION_TTL_MS };
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+              return fresh.id;
+            } catch {
+              /* localStorage bloqueado: seguimos con un id en memoria */
+            }
+          }
+          if (!sessionId.memory) sessionId.memory = randomId();
+          return sessionId.memory;
+        }
+
+        function cleanMetadata(metadata) {
+          var out = {};
+          if (!metadata || typeof metadata !== "object") return out;
+          Object.keys(metadata).slice(0, 20).forEach(function (key) {
+            var value = metadata[key];
+            if (!/^[A-Za-z0-9_.-]{1,40}$/.test(key)) return;
+            if (typeof value === "string") out[key] = value.slice(0, 200);
+            else if (typeof value === "number" || typeof value === "boolean" || value === null) out[key] = value;
+          });
+          return out;
+        }
+
+        function send(body) {
+          // text/plain evita el preflight CORS y es compatible con sendBeacon.
+          var payload = JSON.stringify(body);
+          try {
+            if (navigator.sendBeacon) {
+              var blob = new Blob([payload], { type: "text/plain;charset=UTF-8" });
+              if (navigator.sendBeacon(ENDPOINT, blob)) return;
+            }
+          } catch {
+            /* continúa con fetch */
+          }
+          try {
+            fetch(ENDPOINT, {
+              method: "POST",
+              body: payload,
+              headers: { "Content-Type": "text/plain;charset=UTF-8" },
+              keepalive: true,
+              mode: "cors",
+              credentials: "omit",
+            }).catch(function () {});
+          } catch {
+            /* el tracking nunca debe romper el perfil */
+          }
+        }
+
+        /**
+         * Envía un evento a LAZU.
+         * @param {string} eventName uno de EVENTS
+         * @param {Object} [metadata] valores simples (texto, número, booleano)
+         */
+        function lazuTrack(eventName, metadata) {
+          if (!PROFILE) {
+            if (window.console) console.warn("[LAZU] Falta LAZU_PROFILE_ID");
+            return;
+          }
+          if (EVENTS.indexOf(eventName) === -1) {
+            if (window.console) console.warn("[LAZU] Evento no soportado:", eventName);
+            return;
+          }
+          var body = {
+            profile: PROFILE,
+            event: eventName,
+            sessionId: sessionId(),
+            metadata: cleanMetadata(metadata),
+          };
+          if (eventName === "page_view" && document.referrer) body.referrer = document.referrer;
+          send(body);
+        }
+
+        // Delegación de eventos: cualquier elemento con data-lazu-event se registra al hacer clic,
+        // sin que el diseñador escriba JavaScript. Opcional: data-lazu-label="instagram".
+        function onClick(e) {
+          if (e.type === "auxclick" && e.button !== 1) return;
+          var target = e.target && e.target.closest ? e.target.closest("[data-lazu-event]") : null;
+          if (!target) return;
+          var metadata = {};
+          var label = target.getAttribute("data-lazu-label");
+          if (label) metadata.label = label;
+          var href = target.getAttribute("href");
+          if (href) {
+            try {
+              var url = new URL(href, location.href);
+              metadata.target = url.protocol === "tel:" || url.protocol === "mailto:" ? url.protocol.slice(0, -1) : url.hostname;
+            } catch {
+              /* href no válido: se ignora */
+            }
+          }
+          lazuTrack(target.getAttribute("data-lazu-event"), metadata);
+        }
+
+        document.addEventListener("click", onClick, true);
+        document.addEventListener("auxclick", onClick, true);
+
+        window.lazuTrack = lazuTrack;
+
+        if (AUTO_PAGE_VIEW) {
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", function () {
+              lazuTrack("page_view");
+            });
+          } else {
+            lazuTrack("page_view");
+          }
+        }
+      })();
+      /* LAZU-TRACKER:END */
+    </script>
+    <!-- ===== fin LAZU tracker ===== -->
+  </body>
+</html>
