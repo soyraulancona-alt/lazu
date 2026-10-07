@@ -150,14 +150,21 @@ npm run build
 
 ## 10. Desplegar
 
-### Vercel (recomendado)
+### Vercel + Neon (recomendado)
 
-1. Sube el repositorio a GitHub e impórtalo en Vercel.
-2. Crea un PostgreSQL gestionado (Neon, Supabase, Vercel Postgres…) y copia su URL.
-3. En Vercel → Settings → Environment Variables: `DATABASE_URL`, `AUTH_SECRET`, `ALLOWED_ORIGINS` (p. ej. `https://lazu.bio,https://*.lazu.bio`), `DASHBOARD_TIMEZONE`.
-4. Build command: `npx prisma migrate deploy && npm run build`.
-5. Ejecuta el seed una vez desde tu máquina apuntando a la BD de producción (`DATABASE_URL=… SEED_ADMIN_EMAIL=… SEED_ADMIN_PASSWORD=… npm run db:seed`).
-6. Añade el dominio `app.lazu.bio` en Vercel y su registro DNS (CNAME a `cname.vercel-dns.com`).
+1. Fusiona el código en `main` en GitHub.
+2. En [vercel.com](https://vercel.com) entra con tu cuenta de GitHub → **Add New → Project** → importa el repositorio `lazu` → en **Environment Variables** añade:
+   - `AUTH_SECRET`: texto aleatorio de 32 caracteres o más.
+   - `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`: tu usuario administrador (contraseña ≥ 10 caracteres).
+   - `DASHBOARD_TIMEZONE` (opcional), p. ej. `America/Mexico_City`.
+   - `ALLOWED_ORIGINS`: los dominios de tus perfiles, p. ej. `https://lazu.bio,https://*.lazu.bio`.
+   Pulsa **Deploy**. El primer despliegue fallará porque todavía no hay base de datos; es normal.
+3. En el proyecto de Vercel → **Storage → Create Database → Neon** → conéctala al proyecto. Esto crea `DATABASE_URL` y `DATABASE_URL_UNPOOLED` automáticamente.
+4. **Deployments → ⋯ → Redeploy**.
+
+En cada despliegue, el script `vercel-build` aplica las migraciones (`prisma migrate deploy`), ejecuta el seed (idempotente: crea el admin y `test-profile` solo si no existen) y compila. Los HTML servidos por la propia app (como `/test-profile.html`) siempre pueden enviar eventos, sin añadir su dominio a `ALLOWED_ORIGINS`.
+
+Para usar `app.lazu.bio`: Vercel → Settings → Domains → añade `app.lazu.bio` y crea en tu DNS el registro CNAME que Vercel indique.
 
 ### Servidor propio (VPS)
 

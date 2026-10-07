@@ -13,6 +13,10 @@ async function main() {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password || password.length < 10) {
+    if (process.env.VERCEL) {
+      console.log("Seed omitido: define SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD para crear el admin.");
+      return;
+    }
     throw new Error("Define SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD (mínimo 10 caracteres) en .env");
   }
 

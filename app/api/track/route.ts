@@ -32,7 +32,9 @@ function json(
  */
 function resolveOrigin(request: NextRequest): { allowed: boolean; headers: Record<string, string> } {
   const origin = request.headers.get("origin");
-  if (isOriginAllowed(origin, config.allowedOrigins, !config.isProduction)) {
+  // Los HTML servidos por la propia app (p. ej. /test-profile.html) siempre pueden enviar eventos.
+  const sameOrigin = origin === request.nextUrl.origin;
+  if (sameOrigin || isOriginAllowed(origin, config.allowedOrigins, !config.isProduction)) {
     return { allowed: true, headers: corsHeaders(origin!) };
   }
   return { allowed: false, headers: { Vary: "Origin" } };
