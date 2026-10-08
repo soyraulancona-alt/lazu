@@ -1,0 +1,72 @@
+// LAZU · esquema de base de datos (Fase 1)
+// La plataforma central solo guarda identidad de perfiles, eventos y usuarios del dashboard.
+// Los perfiles HTML viven fuera de esta app y nunca se renderizan aquí.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN // ve y administra todos los perfiles
+  OWNER // solo ve los perfiles de los que es dueño
+}
+
+enum ProfileStatus {
+  ACTIVE // acepta eventos
+  INACTIVE // pausado: los eventos se rechazan
+  SUSPENDED // bloqueado administrativamente
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole  @default(OWNER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  profiles     Profile[]
+}
+
+model Profile {
+  id          String        @id @default(cuid())
+  // Identificador público que va dentro del HTML (LAZU_PROFILE_ID).
+  slug        String        @unique
+  name        String
+  status      ProfileStatus @default(ACTIVE)
+  ownerUserId String?
+  owner       User?         @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  events      Event[]
+
+  @@index([ownerUserId])
+}
+
+model Event {
+  id                 String   @id @default(cuid())
+  profileId          String
+  profile            Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Texto validado contra una lista blanca en el servidor (lib/events.ts).
+  // No es un enum de PostgreSQL para poder agregar tipos sin migración.
+  eventType          String   @db.VarChar(40)
+  // Siempre lo genera el servidor; nunca se confía en la hora del navegador.
+  timestamp          DateTime @default(now())
+  // Solo origen + ruta, sin query string ni fragmento.
+  referrer           String?  @db.VarChar(500)
+  userAgent          String?  @db.VarChar(400)
+  deviceType         String   @db.VarChar(16)
+  // Identificador aleatorio generado en el navegador. Nunca datos personales.
+  anonymousSessionId String?  @db.VarChar(64)
+  metadata           Json?
+  // Nota de privacidad: la IP no se guarda en ninguna columna.
+
+  @@index([profileId, timestamp])
+  @@index([profileId, eventType, timestamp])
+  @@index([timestamp])
+}

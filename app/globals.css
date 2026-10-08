@@ -1,26 +1,20 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-navy: #023047;
+  --color-navy-700: #0a4461;
+  --color-orange: #fb8500;
+  --color-orange-600: #e07400;
+  --color-surface: #f4f6f8;
+  /* Series de gráficas validadas para daltonismo y contraste (ver components/daily-chart.tsx) */
+  --color-series-visits: #0077b6;
+  --color-series-interactions: #e07400;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: #0f1c24;
+  font-family: var(--font-sans);
 }
