@@ -12,9 +12,18 @@ export const EVENT_TYPES = [
   "custom",
 ] as const;
 
-export type EventType = (typeof EVENT_TYPES)[number];
+export type ClientEventType = (typeof EVENT_TYPES)[number];
 
-const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES);
+// Eventos que solo registra el servidor (el tracker no puede enviarlos).
+export const SERVER_EVENT_TYPES = [
+  "card_scan", // alguien abrió una tarjeta física (NFC o QR) en /c/<código>
+  "lead_submit", // un visitante dejó sus datos en el formulario del perfil
+] as const;
+
+export const ALL_EVENT_TYPES = [...EVENT_TYPES, ...SERVER_EVENT_TYPES] as const;
+export type EventType = (typeof ALL_EVENT_TYPES)[number];
+
+const EVENT_TYPE_SET: ReadonlySet<string> = new Set(ALL_EVENT_TYPES);
 
 export function isEventType(value: unknown): value is EventType {
   return typeof value === "string" && EVENT_TYPE_SET.has(value);
@@ -30,6 +39,8 @@ export const EVENT_LABELS: Record<EventType, string> = {
   contact_save: "Contacto guardado",
   catalog_view: "Catálogo",
   custom: "Personalizado",
+  card_scan: "Tarjeta escaneada",
+  lead_submit: "Contacto recibido",
 };
 
 export function eventLabel(type: string): string {

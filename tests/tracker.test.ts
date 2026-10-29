@@ -34,3 +34,11 @@ test("el HTML de prueba marca los botones requeridos", () => {
     assert.match(html, new RegExp(`data-lazu-event="${event}"`), event);
   }
 });
+
+test("el tracker envía formularios de contacto marcados con data-lazu-lead", () => {
+  assert.match(tracker, /form\[data-lazu-lead\]/);
+  assert.match(tracker, /\/api\/leads/);
+  assert.match(html, /<form[^>]*data-lazu-lead/);
+  assert.match(html, /name="consent"[^>]*required/, "el consentimiento debe ser obligatorio en el formulario");
+  assert.match(html, /name="website"/, "campo trampa para bots");
+});

@@ -68,6 +68,31 @@ En cada clic el tracker añade a `metadata`:
 
 El servidor rechaza cualquier otro tipo. Para agregar uno nuevo se añade a `lib/events.ts` y a la lista `EVENTS` de `tracker/lazu-tracker.js` (un test verifica que ambas listas coincidan).
 
+Además, el servidor registra por su cuenta `card_scan` (alguien abrió una tarjeta física en `/c/<código>`) y `lead_submit` (llegó un contacto por el formulario). El tracker no puede enviarlos: así nadie infla esas métricas desde el navegador.
+
+### Formulario de contacto (`data-lazu-lead`)
+
+Para que un visitante deje sus datos, agrega un formulario con `data-lazu-lead`. El tracker lo envía a `/api/leads` (mismo servidor que `LAZU_ENDPOINT`, o `LAZU_LEADS_ENDPOINT` si lo defines) sin recargar la página:
+
+```html
+<form data-lazu-lead data-lazu-consent-version="2026-10">
+  <input name="name" required placeholder="Tu nombre" />
+  <input name="phone" type="tel" placeholder="WhatsApp o teléfono" />
+  <input name="email" type="email" placeholder="Correo" />
+  <textarea name="message" placeholder="¿En qué te ayudo?"></textarea>
+  <!-- Campo trampa para bots: fuera de pantalla, las personas no lo ven. -->
+  <div style="position:absolute;left:-10000px" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off" /></div>
+  <label><input type="checkbox" name="consent" required /> Acepto que me contacten según el aviso de privacidad.</label>
+  <button type="submit">Enviar</button>
+  <p class="ok">¡Gracias!</p>
+</form>
+```
+
+- Obligatorios: `name`, al menos `phone` o `email`, y la casilla `consent` marcada.
+- El estado queda en `data-lazu-state` del formulario (`sending`, `sent`, `error`) y se emite el evento `lazu:lead`; muéstralo con CSS, p. ej. `form[data-lazu-state="sent"] .ok { display: block }`.
+- `data-lazu-consent-version` guarda qué versión del aviso de privacidad aceptó el visitante.
+- Límite: 5 envíos cada 10 minutos por IP. El contacto solo lo ven la empresa y el colaborador del perfil, y solo con un plan vigente que incluya contactos.
+
 ---
 
 ## 3. API manual: `lazuTrack(eventName, metadata)`
@@ -149,7 +174,7 @@ Por eso el dashboard habla de visitantes **aproximados**: borrar datos del naveg
 ## 6. Requisitos del lado del servidor
 
 - El **dominio del perfil debe estar en `ALLOWED_ORIGINS`** de la plataforma (p. ej. `https://barberialux.com` o `https://*.lazu.bio`). Si no, el servidor responde `403 origin_not_allowed` y no guarda nada.
-- El perfil debe existir y estar **Activo** en el dashboard. Si está Inactivo o Suspendido, los eventos se rechazan.
+- El perfil debe existir y estar **Activo** en el dashboard, y su empresa no debe estar suspendida. Si no, los eventos se rechazan.
 - Límite: 60 eventos por minuto por IP (configurable con `TRACK_RATE_LIMIT_PER_MINUTE`).
 - Bots y generadores de vista previa (Googlebot, WhatsApp al compartir el enlace, navegadores headless) reciben `success: true` pero no se cuentan.
 

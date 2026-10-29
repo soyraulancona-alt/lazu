@@ -1,8 +1,8 @@
 # LAZU · Plataforma central
 
-Tracking, estadísticas y administración de perfiles digitales LAZU (personas y negocios accesibles por URL, QR y NFC).
+Tracking, estadísticas y administración de perfiles digitales LAZU (personas y negocios accesibles por URL, QR y NFC), pensada para **empresas con equipos comerciales**: cada empresa administra a sus colaboradores, sus tarjetas físicas reasignables y los contactos que generan.
 
-Cada perfil es un **archivo HTML independiente** con diseño libre, alojado donde quieras (p. ej. Hostinger). Esta plataforma **no renderiza perfiles**: solo los identifica, recibe sus eventos y muestra estadísticas.
+Cada perfil es un **archivo HTML independiente** con diseño libre, alojado donde quieras (p. ej. Hostinger). Esta plataforma **no renderiza perfiles**: los identifica, recibe sus eventos y contactos, redirige las tarjetas y muestra estadísticas.
 
 - Arquitectura detallada: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Cómo integrar el tracker en un HTML: [docs/LAZU_STANDALONE_TRACKER.md](docs/LAZU_STANDALONE_TRACKER.md)
@@ -12,12 +12,13 @@ Cada perfil es un **archivo HTML independiente** con diseño libre, alojado dond
 ## 1. Arquitectura en breve
 
 ```
-perfil.html (Hostinger, diseño libre) ──POST /api/track──▶ Next.js (app.lazu.bio) ──Prisma──▶ PostgreSQL
-                                                              └── /dashboard (protegido)
+Tarjeta NFC/QR ──GET /c/<código>──▶ Next.js (app.lazu.bio) ──302──▶ perfil.html (Hostinger, diseño libre)
+perfil.html ──POST /api/track, /api/leads──▶ Next.js ──Prisma──▶ PostgreSQL
+                                             └── /dashboard/<empresa> (protegido, multiempresa)
 ```
 
 - **Next.js 16 + TypeScript** — API pública `/api/track` y dashboard en un solo proyecto.
-- **PostgreSQL + Prisma 7** — tablas `User`, `Profile`, `Event`.
+- **PostgreSQL + Prisma 7** — `Organization`, `Membership`, `User`, `Profile`, `Card`, `Event`, `Lead`, `AuditLog`.
 - **Tailwind CSS + Recharts** — interfaz y gráfica de 30 días.
 - **Auth propia** — bcrypt + JWT firmado en cookie httpOnly.
 
@@ -101,17 +102,17 @@ npm run db:seed
 
 Crea (sin duplicar si ya existen):
 
-- el usuario admin con `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`;
-- el perfil `test-profile` · "Perfil de Prueba LAZU" · Activo.
+- el administrador de LAZU con `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`;
+- la empresa `lazu-demo` (plan Equipo, 5 perfiles) con el admin como propietario;
+- el perfil `test-profile` · "Perfil de Prueba LAZU" · Activo, y una tarjeta asignada (el seed imprime su enlace).
 
-Más usuarios:
+Los clientes se dan de alta desde el panel: **Empresas → Nueva empresa** (solo personal de LAZU) crea la empresa y su propietario, y el propietario agrega a su equipo en **Equipo**. Si la persona no tiene cuenta, se muestra una contraseña temporal una sola vez; cada quien la cambia en **Mi cuenta**.
+
+Personal de LAZU desde la terminal:
 
 ```bash
-npm run user:create -- cliente@correo.com "Juan Pérez" "contraseña-segura" OWNER
 npm run user:create -- otra@lazu.bio "Ana" "contraseña-segura" ADMIN
 ```
-
-Un `OWNER` solo ve sus perfiles. Al crear un perfil en el dashboard se puede asignar su dueño por email.
 
 ## 9. Probar el tracking
 
@@ -128,6 +129,9 @@ cd public && python3 -m http.server 5500     # o: npx serve -l 5500
 
 (También puedes abrir <http://localhost:3000/test-profile.html> directamente; la app sirve la carpeta `public`.)
 
+5. Abre el enlace de tarjeta que imprimió el seed (`http://localhost:3000/c/<código>`): redirige al perfil y suma un escaneo. Con `?v=qr` cuenta como QR.
+6. Llena "¿Te contacto yo?" en el perfil: el contacto aparece en **Contactos** del panel.
+
 Prueba rápida desde la terminal:
 
 ```bash
@@ -142,7 +146,8 @@ Respuestas de error: `origin_not_allowed` (403), `invalid_json` / `invalid_paylo
 ### Calidad
 
 ```bash
-npm test           # tests unitarios (validación, CORS, rate limit, tracker)
+npm test           # tests unitarios (validación, permisos, planes, tarjetas, CSV, plantillas, tracker)
+DATABASE_URL_TEST="postgresql://…/lazu_test" npm run test:db   # aislamiento entre empresas contra PostgreSQL real
 npm run lint
 npm run typecheck
 npm run build
@@ -158,11 +163,14 @@ npm run build
    - `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`: tu usuario administrador (contraseña ≥ 10 caracteres).
    - `DASHBOARD_TIMEZONE` (opcional), p. ej. `America/Mexico_City`.
    - `ALLOWED_ORIGINS`: los dominios de tus perfiles, p. ej. `https://lazu.bio,https://*.lazu.bio`.
+   - `CARD_BASE_URL` (opcional): dominio que se graba en las tarjetas, por defecto `https://app.lazu.bio`.
    Pulsa **Deploy**. El primer despliegue fallará porque todavía no hay base de datos; es normal.
 3. En el proyecto de Vercel → **Storage → Create Database → Neon** → conéctala al proyecto. Esto crea `DATABASE_URL` y `DATABASE_URL_UNPOOLED` automáticamente.
 4. **Deployments → ⋯ → Redeploy**.
 
 En cada despliegue, el script `vercel-build` aplica las migraciones (`prisma migrate deploy`), ejecuta el seed (idempotente: crea el admin y `test-profile` solo si no existen) y compila. Los HTML servidos por la propia app (como `/test-profile.html`) siempre pueden enviar eventos, sin añadir su dominio a `ALLOWED_ORIGINS`.
+
+**¿Olvidaste la contraseña del administrador?** En Vercel → Settings → Environment Variables: pon una contraseña nueva (≥ 10 caracteres) en `SEED_ADMIN_PASSWORD`, añade `SEED_ADMIN_RESET_PASSWORD` = `true` y haz **Redeploy**. Entra con `SEED_ADMIN_EMAIL` y la nueva contraseña, y después borra `SEED_ADMIN_RESET_PASSWORD` (si se queda, cada despliegue vuelve a imponer esa contraseña).
 
 Para usar `app.lazu.bio`: Vercel → Settings → Domains → añade `app.lazu.bio` y crea en tu DNS el registro CNAME que Vercel indique.
 
@@ -177,7 +185,7 @@ Si no hay un proxy delante que fije `X-Forwarded-For`, el rate limiting puede se
 
 ## 11. Crear un nuevo perfil HTML independiente
 
-1. **Regístralo** en el dashboard (admin) → Nuevo perfil → slug `barberia-lux`, nombre, dueño opcional.
+1. **Regístralo** en el panel de la empresa → Equipo → Nuevo perfil → identificador `barberia-lux`, nombre, colaborador y, cuando esté publicado, su URL (las tarjetas redirigen ahí).
 2. **Diseña** `barberia-lux.html` como quieras: HTML, CSS y JS propios en un solo archivo. No hay plantilla obligatoria. Puedes partir de `public/test-profile.html` o de cero.
 3. **Súbelo** a Hostinger (o cualquier hosting estático) en el dominio/subdominio que prefieras.
 4. **Autoriza su dominio** añadiéndolo a `ALLOWED_ORIGINS` de la plataforma (o usa un comodín como `https://*.lazu.bio`).
@@ -214,3 +222,36 @@ Todos los detalles (eventos disponibles, `lazuTrack()` manual, privacidad, depur
 ## Fuera del alcance de la Fase 1
 
 Editor visual, constructor de perfiles, plantillas, pagos, suscripciones, facturación, app móvil, marketplace, IA y CRM.
+
+## 13. Empresas, roles y planes
+
+| Rol | Qué puede hacer |
+|---|---|
+| Personal de LAZU (`User.role = ADMIN`) | Todo en todas las empresas: alta de clientes, plan, perfiles incluidos, vigencia, suspensión. |
+| Propietario | Todo en su empresa, incluidos otros propietarios y los datos de la empresa. |
+| Administrador | Equipo, perfiles, tarjetas, contactos y CSV. No toca propietarios. |
+| Colaborador | Solo sus perfiles, sus estadísticas y sus contactos. |
+
+Los planes (`lib/plans.ts`) deciden qué se ve: **Individual** (estadísticas propias, contactos, tarjetas), **Equipo** (+ ranking por colaborador y CSV) y **Empresa** (+ registro de acciones). La unidad de cobro son los **perfiles activos** (`seatLimit`). Si `paidUntil` vence, LAZU sigue registrando la actividad, pero el ranking, los contactos y las tarjetas nuevas quedan bloqueados hasta renovar. El cobro se hace fuera de la plataforma y se registra en **Plan → Facturación**.
+
+## 14. Tarjetas físicas reasignables
+
+En **Tarjetas** se generan códigos (`/c/<código>`). Graba en el chip NFC `https://app.lazu.bio/c/<código>` y en el QR `https://app.lazu.bio/c/<código>?v=qr`. La tarjeta redirige al perfil asignado en ese momento: si alguien sale de la empresa, se reasigna o se desactiva sin reimprimir. Una tarjeta desactivada o sin asignar lleva a la página de respaldo de la empresa (Plan → Datos de la empresa).
+
+## 15. Generar los perfiles de un equipo
+
+1. **Plantilla de la empresa**: un HTML con marcadores (`{{name}}`, `{{jobTitle}}`, `{{whatsapp|url}}`…). Parte de [`templates/plantilla-ejemplo.html`](templates/plantilla-ejemplo.html) o pide un borrador a Claude a partir de la descripción del negocio:
+
+   ```bash
+   ANTHROPIC_API_KEY=… npm run profile:design -- descripcion.txt plantilla.html --preview vista-previa/
+   ```
+
+   El borrador se valida contra el contrato de LAZU (sin scripts ni estilos externos, sin peticiones de red, con el bloque del tracker). Revísalo antes de usarlo.
+2. **Un HTML por colaborador** con los datos capturados en el panel:
+
+   ```bash
+   npm run profiles:generate -- <empresa> plantilla.html salida/ --endpoint https://app.lazu.bio/api/track
+   ```
+
+   Cada archivo lleva su `LAZU_PROFILE_ID`, los datos escapados y el tracker oficial. Súbelos al hosting y pega la URL de cada uno en su perfil del panel.
+

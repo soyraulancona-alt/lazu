@@ -8,7 +8,8 @@ export type CurrentUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "OWNER";
+  /** ADMIN = personal de LAZU (entra a cualquier empresa). USER = cliente. */
+  role: "ADMIN" | "USER";
 };
 
 /**
@@ -30,13 +31,8 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-export async function requireAdmin(): Promise<CurrentUser> {
+export async function requirePlatformAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
   if (user.role !== "ADMIN") redirect("/dashboard");
   return user;
-}
-
-/** Filtro Prisma con los perfiles que este usuario puede ver. */
-export function profileScope(user: CurrentUser) {
-  return user.role === "ADMIN" ? {} : { ownerUserId: user.id };
 }

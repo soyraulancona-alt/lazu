@@ -74,6 +74,18 @@
       footer { margin-top: 24px; font-size: 11px; color: var(--muted); }
       footer strong { color: var(--navy); }
       .status { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 1em; }
+      .lead { margin-top: 22px; text-align: left; display: grid; gap: 8px; }
+      .lead h2 { margin: 0 0 4px; font-size: 16px; color: var(--navy); text-align: center; }
+      .lead input, .lead textarea {
+        width: 100%; padding: 11px 12px; border: 1px solid #cfd8de; border-radius: 10px; font: inherit; font-size: 14px;
+      }
+      .lead .consent { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); }
+      .lead .consent input { width: auto; margin-top: 2px; }
+      .lead .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+      .lead .msg { display: none; font-size: 13px; text-align: center; margin: 0; }
+      .lead[data-lazu-state="sent"] .msg-sent,
+      .lead[data-lazu-state="error"] .msg-error { display: block; }
+      .lead[data-lazu-state="sending"] button { opacity: 0.6; }
     </style>
   </head>
   <body>
@@ -109,6 +121,23 @@
         <a data-lazu-event="social_click" data-lazu-label="tiktok" href="https://tiktok.com/" target="_blank" rel="noopener">TikTok</a>
       </nav>
 
+      <!-- Formulario de contacto: el tracker lo envía a LAZU con data-lazu-lead. -->
+      <form class="lead" data-lazu-lead data-lazu-consent-version="2026-10">
+        <h2>¿Te contacto yo?</h2>
+        <input name="name" required autocomplete="name" placeholder="Tu nombre" aria-label="Tu nombre" />
+        <input name="phone" type="tel" autocomplete="tel" placeholder="WhatsApp o teléfono" aria-label="WhatsApp o teléfono" />
+        <input name="email" type="email" autocomplete="email" placeholder="Correo (opcional)" aria-label="Correo" />
+        <!-- Campo trampa para bots: invisible para las personas. -->
+        <div class="hp" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off" /></div>
+        <label class="consent">
+          <input type="checkbox" name="consent" required />
+          <span>Acepto que LAZU y esta empresa usen mis datos para contactarme, según su aviso de privacidad.</span>
+        </label>
+        <button class="btn btn-dark" type="submit">Enviar mis datos</button>
+        <p class="msg msg-sent" role="status">¡Gracias! Te contactaré pronto.</p>
+        <p class="msg msg-error" role="alert">No se pudo enviar. Revisa que hayas dejado teléfono o correo.</p>
+      </form>
+
       <p class="status" id="status" aria-live="polite"></p>
       <footer>Perfil digital por <strong>LAZU</strong></footer>
     </main>
@@ -140,7 +169,7 @@
       const LAZU_PROFILE_ID = "test-profile";
       const LAZU_ENDPOINT = "http://localhost:3000/api/track";
       /* LAZU-TRACKER:START */
-      /*! LAZU standalone tracker v1 · sin dependencias · https://lazu.bio */
+      /*! LAZU standalone tracker v2 · sin dependencias · https://lazu.bio */
       (function () {
         "use strict";
 
@@ -149,6 +178,11 @@
         var ENDPOINT =
           typeof LAZU_ENDPOINT !== "undefined" ? String(LAZU_ENDPOINT) : "https://app.lazu.bio/api/track";
         var AUTO_PAGE_VIEW = typeof LAZU_AUTO_PAGE_VIEW !== "undefined" ? !!LAZU_AUTO_PAGE_VIEW : true;
+        // Formularios de contacto: por defecto, el mismo servidor que el tracking.
+        var LEADS_ENDPOINT =
+          typeof LAZU_LEADS_ENDPOINT !== "undefined"
+            ? String(LAZU_LEADS_ENDPOINT)
+            : ENDPOINT.replace(/\/api\/track\/?$/, "/api/leads");
 
         var STORAGE_KEY = "lazu_session_id";
         var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
@@ -281,6 +315,69 @@
 
         document.addEventListener("click", onClick, true);
         document.addEventListener("auxclick", onClick, true);
+
+        // Formulario de contacto: <form data-lazu-lead> con campos name, phone, email,
+        // company, message y la casilla consent. El tracker lo envía a LAZU y marca el
+        // estado en data-lazu-state ("sending", "sent", "error") para que el diseño lo muestre.
+        function setLeadState(form, state) {
+          form.setAttribute("data-lazu-state", state);
+          try {
+            form.dispatchEvent(new CustomEvent("lazu:lead", { detail: { state: state }, bubbles: true }));
+          } catch {
+            /* navegadores sin CustomEvent: el atributo basta */
+          }
+        }
+
+        function onSubmit(e) {
+          var form = e.target && e.target.closest ? e.target.closest("form[data-lazu-lead]") : null;
+          if (!form) return;
+          e.preventDefault();
+          if (!PROFILE || form.getAttribute("data-lazu-state") === "sending") return;
+          function value(name) {
+            var el = form.elements.namedItem(name);
+            return el && typeof el.value === "string" ? el.value.slice(0, 1000) : "";
+          }
+          var consent = form.elements.namedItem("consent");
+          var body = {
+            profile: PROFILE,
+            name: value("name"),
+            phone: value("phone"),
+            email: value("email"),
+            company: value("company"),
+            message: value("message"),
+            consent: !!(consent && consent.checked),
+            website: value("website"),
+          };
+          var version = form.getAttribute("data-lazu-consent-version");
+          if (version) body.consentVersion = version;
+          setLeadState(form, "sending");
+          fetch(LEADS_ENDPOINT, {
+            method: "POST",
+            body: JSON.stringify(body),
+            headers: { "Content-Type": "text/plain;charset=UTF-8" },
+            mode: "cors",
+            credentials: "omit",
+          })
+            .then(function (res) {
+              return res.json().then(
+                function (data) {
+                  return res.ok && data && data.success === true;
+                },
+                function () {
+                  return false;
+                },
+              );
+            })
+            .then(function (ok) {
+              if (ok) form.reset();
+              setLeadState(form, ok ? "sent" : "error");
+            })
+            .catch(function () {
+              setLeadState(form, "error");
+            });
+        }
+
+        document.addEventListener("submit", onSubmit, true);
 
         window.lazuTrack = lazuTrack;
 

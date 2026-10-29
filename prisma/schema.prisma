@@ -1,6 +1,10 @@
-// LAZU · esquema de base de datos (Fase 1)
-// La plataforma central solo guarda identidad de perfiles, eventos y usuarios del dashboard.
-// Los perfiles HTML viven fuera de esta app y nunca se renderizan aquí.
+// LAZU · esquema de base de datos (Fase 2: multiempresa)
+// La plataforma central guarda identidad (empresas, miembros, perfiles, tarjetas),
+// eventos, contactos capturados y auditoría. Los perfiles HTML viven fuera de esta
+// app y nunca se renderizan aquí.
+//
+// Aislamiento entre empresas: toda fila privada lleva organizationId y toda consulta
+// del dashboard pasa por lib/tenant.ts, que siempre filtra por la empresa de la sesión.
 
 generator client {
   provider = "prisma-client"
@@ -11,9 +15,28 @@ datasource db {
   provider = "postgresql"
 }
 
+// Rol en la plataforma, no dentro de una empresa.
 enum UserRole {
-  ADMIN // ve y administra todos los perfiles
-  OWNER // solo ve los perfiles de los que es dueño
+  ADMIN // personal de LAZU: entra a cualquier empresa como propietario
+  USER // cliente: solo ve las empresas donde es miembro
+}
+
+// Rol dentro de una empresa (ver lib/permissions.ts).
+enum OrgRole {
+  OWNER // dueño de la cuenta: todo, incluidos otros propietarios
+  ADMIN // administra equipo, perfiles, tarjetas y contactos
+  MEMBER // colaborador: solo ve sus propios perfiles y contactos
+}
+
+enum Plan {
+  INDIVIDUAL
+  TEAM
+  ENTERPRISE
+}
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED // bloqueada: sus perfiles y tarjetas dejan de funcionar
 }
 
 enum ProfileStatus {
@@ -22,51 +45,183 @@ enum ProfileStatus {
   SUSPENDED // bloqueado administrativamente
 }
 
+enum CardStatus {
+  ACTIVE
+  INACTIVE // desactivada: quien la escanea va a la página de respaldo de la empresa
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  WON
+  LOST
+}
+
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
   name         String
   passwordHash String
-  role         UserRole  @default(OWNER)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  role         UserRole     @default(USER)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  memberships  Membership[]
   profiles     Profile[]
+  auditLogs    AuditLog[]
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  // Identificador en la URL del panel (/dashboard/<slug>).
+  slug        String       @unique
+  name        String
+  plan        Plan         @default(TEAM)
+  // Perfiles activos que el plan permite (unidad de cobro).
+  seatLimit   Int          @default(5)
+  // Fin del periodo pagado. Vencido: se siguen guardando datos, pero el panel
+  // solo muestra lo básico hasta renovar (ver lib/plans.ts).
+  paidUntil   DateTime?
+  status      OrgStatus    @default(ACTIVE)
+  // A dónde lleva una tarjeta desactivada o sin asignar (p. ej. el sitio de la empresa).
+  fallbackUrl String?      @db.VarChar(500)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  profiles    Profile[]
+  cards       Card[]
+  events      Event[]
+  leads       Lead[]
+  auditLogs   AuditLog[]
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           OrgRole      @default(MEMBER)
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([userId])
 }
 
 model Profile {
-  id          String        @id @default(cuid())
-  // Identificador público que va dentro del HTML (LAZU_PROFILE_ID).
-  slug        String        @unique
-  name        String
-  status      ProfileStatus @default(ACTIVE)
-  ownerUserId String?
-  owner       User?         @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  events      Event[]
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Identificador público que va dentro del HTML (LAZU_PROFILE_ID). Único global.
+  slug           String        @unique
+  name           String
+  status         ProfileStatus @default(ACTIVE)
+  // Colaborador al que pertenece el perfil (ve sus estadísticas y contactos).
+  memberUserId   String?
+  member         User?         @relation(fields: [memberUserId], references: [id], onDelete: SetNull)
+  // Datos del colaborador para generar su HTML (scripts/generate-profiles.ts).
+  jobTitle       String?       @db.VarChar(120)
+  phone          String?       @db.VarChar(40)
+  whatsapp       String?       @db.VarChar(40)
+  email          String?       @db.VarChar(200)
+  // Dirección donde está publicado el HTML. Las tarjetas redirigen aquí.
+  publicUrl      String?       @db.VarChar(500)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  events         Event[]
+  cards          Card[]
+  leads          Lead[]
 
-  @@index([ownerUserId])
+  @@index([organizationId])
+  @@index([memberUserId])
+}
+
+// Tarjeta física (NFC + QR). Apunta a /c/<code>, no al perfil: así se reasigna
+// sin reimprimir cuando alguien entra o sale del equipo.
+model Card {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String       @unique @db.VarChar(16)
+  label          String?      @db.VarChar(80)
+  status         CardStatus   @default(ACTIVE)
+  profileId      String?
+  profile        Profile?     @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  assignedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  events         Event[]
+
+  @@index([organizationId])
+  @@index([profileId])
 }
 
 model Event {
-  id                 String   @id @default(cuid())
+  id                 String       @id @default(cuid())
+  // Copia de profile.organizationId: permite filtrar y agregar por empresa sin JOIN.
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   profileId          String
-  profile            Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile            Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  cardId             String?
+  card               Card?        @relation(fields: [cardId], references: [id], onDelete: SetNull)
   // Texto validado contra una lista blanca en el servidor (lib/events.ts).
   // No es un enum de PostgreSQL para poder agregar tipos sin migración.
-  eventType          String   @db.VarChar(40)
+  eventType          String       @db.VarChar(40)
   // Siempre lo genera el servidor; nunca se confía en la hora del navegador.
-  timestamp          DateTime @default(now())
+  timestamp          DateTime     @default(now())
   // Solo origen + ruta, sin query string ni fragmento.
-  referrer           String?  @db.VarChar(500)
-  userAgent          String?  @db.VarChar(400)
-  deviceType         String   @db.VarChar(16)
+  referrer           String?      @db.VarChar(500)
+  userAgent          String?      @db.VarChar(400)
+  deviceType         String       @db.VarChar(16)
   // Identificador aleatorio generado en el navegador. Nunca datos personales.
-  anonymousSessionId String?  @db.VarChar(64)
+  anonymousSessionId String?      @db.VarChar(64)
   metadata           Json?
   // Nota de privacidad: la IP no se guarda en ninguna columna.
 
   @@index([profileId, timestamp])
   @@index([profileId, eventType, timestamp])
+  @@index([organizationId, timestamp])
+  @@index([organizationId, eventType, timestamp])
+  @@index([cardId])
   @@index([timestamp])
+}
+
+// Contacto que un visitante deja voluntariamente en un perfil, con consentimiento.
+// Es dato personal de terceros: solo lo ven la empresa y el colaborador del perfil.
+model Lead {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profileId      String?
+  profile        Profile?     @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  name           String       @db.VarChar(120)
+  phone          String?      @db.VarChar(40)
+  email          String?      @db.VarChar(200)
+  company        String?      @db.VarChar(120)
+  message        String?      @db.VarChar(1000)
+  status         LeadStatus   @default(NEW)
+  // Cuándo y con qué texto de aviso de privacidad aceptó el visitante.
+  consentAt      DateTime
+  consentVersion String       @db.VarChar(40)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([profileId, createdAt])
+}
+
+// Registro de acciones administrativas (quién hizo qué y cuándo).
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUserId    String?
+  actor          User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action         String        @db.VarChar(60)
+  targetType     String        @db.VarChar(40)
+  targetId       String?       @db.VarChar(40)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
 }

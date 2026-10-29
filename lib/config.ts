@@ -13,6 +13,8 @@ export const config = {
   allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
   trackRateLimitPerMinute: intFromEnv("TRACK_RATE_LIMIT_PER_MINUTE", 60),
   dashboardTimeZone: process.env.DASHBOARD_TIMEZONE || "UTC",
+  // Dominio que se graba en las tarjetas (NFC y QR): <base>/c/<código>.
+  cardBaseUrl: process.env.CARD_BASE_URL || (isProduction ? "https://app.lazu.bio" : "http://localhost:3000"),
 };
 
 export function authSecret(): Uint8Array {
