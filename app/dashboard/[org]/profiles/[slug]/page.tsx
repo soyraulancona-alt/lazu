@@ -2,28 +2,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { ActionForm, inputClass, labelClass } from "@/components/action-form";
+import { ProfileFields, type EditableProfile } from "@/components/profile-fields";
 import { Card } from "@/components/card";
 import { DailyChart } from "@/components/daily-chart";
 import { KpiCard, KpiSkeleton } from "@/components/kpi-card";
 import { StatusBadge } from "@/components/status-badge";
-import { requireUser } from "@/lib/auth";
-import { EVENT_TYPES, eventLabel } from "@/lib/events";
+import { prisma } from "@/lib/db";
+import { ALL_EVENT_TYPES, eventLabel } from "@/lib/events";
 import { DEVICE_LABELS, formatDateTime } from "@/lib/format";
+import { requireOrg } from "@/lib/guards";
 import { getProfileStats } from "@/lib/stats";
-import { setProfileStatus } from "../../actions";
+import { ctxCan, type OrgContext } from "@/lib/tenant";
+import { updateProfile } from "../../actions";
 
 export const metadata: Metadata = { title: "Perfil" };
 
-export default function ProfilePage({ params }: PageProps<"/dashboard/profiles/[slug]">) {
+export default function ProfilePage({ params }: PageProps<"/dashboard/[org]/profiles/[slug]">) {
   return (
-    <div className="space-y-6">
-      <Link href="/dashboard" className="text-sm text-slate-500 hover:text-navy">
-        ← Volver al resumen
-      </Link>
-      <Suspense fallback={<KpiSkeleton count={8} />}>
-        <ProfileDetail params={params} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<KpiSkeleton count={8} />}>
+      <ProfileDetail params={params} />
+    </Suspense>
   );
 }
 
@@ -34,66 +33,54 @@ function formatMetadata(value: unknown): string {
     .join(" · ");
 }
 
-async function ProfileDetail({ params }: { params: Promise<{ slug: string }> }) {
-  const [{ slug }, user] = await Promise.all([params, requireUser()]);
-  const stats = await getProfileStats(user, slug);
+async function ProfileDetail({ params }: { params: Promise<{ org: string; slug: string }> }) {
+  const { org, slug } = await params;
+  const ctx = await requireOrg(org);
+  const stats = await getProfileStats(ctx, slug);
   if (!stats) notFound();
   const { profile, counts, counts30 } = stats;
+  const canManage = ctxCan(ctx, "profiles.manage");
 
   return (
-    <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-navy">{profile.name}</h1>
-            <StatusBadge status={profile.status} />
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Slug <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-navy">{profile.slug}</code>
-            {profile.owner ? <> · Dueño: {profile.owner.name}</> : null} · Creado {formatDateTime(profile.createdAt)}
-          </p>
+    <div className="space-y-6">
+      <Link href={`/dashboard/${ctx.org.slug}`} className="text-sm text-slate-500 hover:text-navy">
+        ← Volver al resumen
+      </Link>
+      <div>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold text-navy">{profile.name}</h2>
+          <StatusBadge status={profile.status} />
         </div>
-        {user.role === "ADMIN" ? (
-          <form action={setProfileStatus} className="flex items-center gap-2">
-            <input type="hidden" name="slug" value={profile.slug} />
-            <select
-              name="status"
-              defaultValue={profile.status}
-              aria-label="Estado del perfil"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="ACTIVE">Activo</option>
-              <option value="INACTIVE">Inactivo</option>
-              <option value="SUSPENDED">Suspendido</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-navy hover:bg-slate-50"
-            >
-              Guardar estado
-            </button>
-          </form>
-        ) : null}
+        <p className="mt-1 text-sm text-slate-500">
+          LAZU_PROFILE_ID <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-navy">{profile.slug}</code>
+          {profile.member ? <> · Colaborador: {profile.member.name}</> : <> · Sin colaborador asignado</>}
+          {profile.publicUrl ? (
+            <>
+              {" · "}
+              <a href={profile.publicUrl} target="_blank" rel="noopener noreferrer" className="text-navy underline">
+                Ver perfil publicado
+              </a>
+            </>
+          ) : null}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard label="Visitas" value={counts.page_view} hint={`${counts30.page_view} en 30 días`} />
-        <KpiCard
-          label="Visitantes aprox."
-          value={stats.visitors}
-          hint={`${stats.visitors30} en 30 días · ids anónimos distintos`}
-        />
-        <KpiCard label="WhatsApp" value={counts.whatsapp_click} hint={`${counts30.whatsapp_click} en 30 días`} accent />
-        <KpiCard label="Teléfono" value={counts.phone_click} hint={`${counts30.phone_click} en 30 días`} />
-        <KpiCard label="Maps" value={counts.maps_click} hint={`${counts30.maps_click} en 30 días`} />
-        <KpiCard label="Sitio web" value={counts.website_click} hint={`${counts30.website_click} en 30 días`} />
-        <KpiCard label="Redes sociales" value={counts.social_click} hint={`${counts30.social_click} en 30 días`} />
-        <KpiCard label="Contactos guardados" value={counts.contact_save} hint={`${counts30.contact_save} en 30 días`} />
+        <KpiCard label="Tarjeta escaneada" value={counts30.card_scan} hint={`30 días · NFC ${stats.scans30.nfc} · QR ${stats.scans30.qr}`} />
+        <KpiCard label="Visitas" value={counts30.page_view} hint={`${counts.page_view} en total`} />
+        <KpiCard label="Visitantes aprox." value={stats.visitors30} hint={`30 días · ${stats.visitors} en total`} />
+        <KpiCard label="WhatsApp" value={counts30.whatsapp_click} hint={`30 días · ${counts.whatsapp_click} en total`} accent />
+        <KpiCard label="Contactos guardados" value={counts30.contact_save} hint={`30 días · ${counts.contact_save} en total`} />
+        <KpiCard label="Contactos recibidos" value={stats.leads30} hint="30 días" accent />
+        <KpiCard label="Teléfono" value={counts30.phone_click} hint={`30 días · ${counts.phone_click} en total`} />
+        <KpiCard label="Tarjetas asignadas" value={profile.cards.filter((c) => c.status === "ACTIVE").length} hint={profile.cards.map((c) => c.code).join(", ") || "ninguna"} />
       </div>
 
-      <Card title="Últimos 30 días" description="Visitas (page_view) frente al resto de interacciones.">
+      <Card title="Últimos 30 días" description="Visitas frente al resto de interacciones.">
         <DailyChart data={stats.daily} />
       </Card>
+
+      {canManage ? <EditProfile ctx={ctx} profile={profile} /> : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Resumen por evento" className="lg:col-span-2">
@@ -107,7 +94,7 @@ async function ProfileDetail({ params }: { params: Promise<{ slug: string }> }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 tabular-nums">
-                {EVENT_TYPES.map((type) => (
+                {ALL_EVENT_TYPES.map((type) => (
                   <tr key={type}>
                     <td className="px-5 py-2.5">
                       {eventLabel(type)} <span className="ml-1 font-mono text-xs text-slate-400">{type}</span>
@@ -116,13 +103,6 @@ async function ProfileDetail({ params }: { params: Promise<{ slug: string }> }) 
                     <td className="px-5 py-2.5 text-right font-medium">{counts[type].toLocaleString("es")}</td>
                   </tr>
                 ))}
-                <tr className="bg-slate-50 font-semibold">
-                  <td className="px-5 py-2.5">Total</td>
-                  <td className="px-5 py-2.5 text-right">
-                    {Object.values(counts30).reduce((a, b) => a + b, 0).toLocaleString("es")}
-                  </td>
-                  <td className="px-5 py-2.5 text-right">{stats.totalEvents.toLocaleString("es")}</td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -156,7 +136,7 @@ async function ProfileDetail({ params }: { params: Promise<{ slug: string }> }) 
       <Card title="Eventos recientes" description="Los últimos 50 eventos recibidos.">
         {stats.recent.length === 0 ? (
           <p className="text-sm text-slate-500">
-            Aún no hay eventos. Abre el HTML del perfil con el tracker configurado para generar el primero.
+            Aún no hay eventos. Abre el HTML del perfil con el tracker configurado o escanea una de sus tarjetas.
           </p>
         ) : (
           <div className="-mx-5 -my-5 overflow-x-auto">
@@ -187,6 +167,32 @@ async function ProfileDetail({ params }: { params: Promise<{ slug: string }> }) 
           </div>
         )}
       </Card>
-    </>
+    </div>
+  );
+}
+
+
+async function EditProfile({ ctx, profile }: { ctx: OrgContext; profile: EditableProfile }) {
+  const members = await prisma.membership.findMany({
+    where: { organizationId: ctx.org.id },
+    orderBy: { user: { name: "asc" } },
+    select: { user: { select: { id: true, name: true } } },
+  });
+  return (
+    <Card title="Datos del perfil" description="Estos datos alimentan la generación del HTML y la redirección de las tarjetas.">
+      <ActionForm action={updateProfile} keepValues submitLabel="Guardar cambios" className="space-y-4">
+        <input type="hidden" name="org" value={ctx.org.slug} />
+        <input type="hidden" name="id" value={profile.id} />
+        <ProfileFields members={members.map((m) => m.user)} profile={profile} />
+        <label className={`${labelClass} max-w-xs`}>
+          Estado
+          <select name="status" defaultValue={profile.status} className={inputClass}>
+            <option value="ACTIVE">Activo</option>
+            <option value="INACTIVE">Pausado</option>
+            {ctx.user.isPlatformAdmin || profile.status === "SUSPENDED" ? <option value="SUSPENDED">Suspendido</option> : null}
+          </select>
+        </label>
+      </ActionForm>
+    </Card>
   );
 }

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}} · {{company}}</title>
+    <meta name="description" content="{{name}}, {{jobTitle}} en {{company}}." />
+    <style>
+      :root { --navy: #023047; --orange: #fb8500; --muted: #5b6b75; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0f1c24;
+        background: linear-gradient(160deg, var(--navy) 0%, #05496a 100%);
+      }
+      .card { width: 100%; max-width: 400px; background: #fff; border-radius: 24px; padding: 32px 24px 24px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.25); }
+      .avatar { width: 88px; height: 88px; margin: 0 auto 16px; border-radius: 50%; background: var(--orange); color: var(--navy); display: grid; place-items: center; font-size: 32px; font-weight: 800; }
+      h1 { margin: 0; font-size: 24px; color: var(--navy); }
+      .role { margin: 6px 0 24px; color: var(--muted); font-size: 14px; }
+      .actions { display: grid; gap: 10px; }
+      .btn { display: flex; justify-content: center; padding: 14px 16px; border-radius: 14px; font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: none; border: 0; cursor: pointer; }
+      .btn-primary { background: var(--orange); color: var(--navy); font-size: 16px; padding: 16px; }
+      .btn-light { background: #eef3f6; color: var(--navy); }
+      .lead { margin-top: 24px; text-align: left; display: grid; gap: 8px; }
+      .lead h2 { margin: 0 0 4px; font-size: 16px; color: var(--navy); text-align: center; }
+      .lead input, .lead textarea { width: 100%; padding: 11px 12px; border: 1px solid #cfd8de; border-radius: 10px; font: inherit; font-size: 14px; }
+      .lead .consent { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); }
+      .lead .consent input { width: auto; margin-top: 2px; }
+      .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+      .msg { display: none; margin: 0; font-size: 13px; text-align: center; }
+      .lead[data-lazu-state="sent"] .msg-sent, .lead[data-lazu-state="error"] .msg-error { display: block; }
+      footer { margin-top: 24px; font-size: 11px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="avatar" aria-hidden="true">{{initials}}</div>
+      <h1>{{name}}</h1>
+      <p class="role">{{#jobTitle}}{{jobTitle}} · {{/jobTitle}}{{company}}</p>
+
+      <div class="actions">
+        {{#whatsapp}}<a class="btn btn-primary" data-lazu-event="whatsapp_click" target="_blank" rel="noopener"
+           href="https://wa.me/{{whatsapp|url}}?text=Hola%20{{name|url}}%2C%20vi%20tu%20tarjeta%20digital">Escríbeme por WhatsApp</a>{{/whatsapp}}
+        <button class="btn btn-light" type="button" id="save-contact" data-lazu-event="contact_save">Guardar contacto</button>
+        {{#phone}}<a class="btn btn-light" data-lazu-event="phone_click" href="tel:{{phoneDigits|url}}">Llamar</a>{{/phone}}
+        {{#email}}<a class="btn btn-light" data-lazu-event="custom" data-lazu-label="email" href="mailto:{{email|url}}">Correo</a>{{/email}}
+      </div>
+
+      <form class="lead" data-lazu-lead data-lazu-consent-version="2026-10">
+        <h2>¿Prefieres que te contacte yo?</h2>
+        <input name="name" required autocomplete="name" placeholder="Tu nombre" aria-label="Tu nombre" />
+        <input name="phone" type="tel" autocomplete="tel" placeholder="WhatsApp o teléfono" aria-label="WhatsApp o teléfono" />
+        <input name="email" type="email" autocomplete="email" placeholder="Correo (opcional)" aria-label="Correo" />
+        <div class="hp" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off" /></div>
+        <label class="consent">
+          <input type="checkbox" name="consent" required />
+          <span>Acepto que {{company}} use mis datos para contactarme, según su aviso de privacidad.</span>
+        </label>
+        <button class="btn btn-light" type="submit">Enviar mis datos</button>
+        <p class="msg msg-sent" role="status">¡Gracias! Te contactaré pronto.</p>
+        <p class="msg msg-error" role="alert">No se pudo enviar. Deja un teléfono o un correo.</p>
+      </form>
+      <footer>Perfil digital por LAZU</footer>
+    </main>
+
+    <script>
+      // vCard generada en el navegador: los datos no salen del teléfono.
+      document.getElementById("save-contact").addEventListener("click", function () {
+        var lines = ["BEGIN:VCARD", "VERSION:3.0", "FN:" + {{name|js}}, "ORG:" + {{company|js}}];
+        if ({{jobTitle|js}}) lines.push("TITLE:" + {{jobTitle|js}});
+        if ({{phone|js}}) lines.push("TEL;TYPE=CELL:" + {{phoneDigits|js}});
+        if ({{email|js}}) lines.push("EMAIL:" + {{email|js}});
+        if ({{publicUrl|js}}) lines.push("URL:" + {{publicUrl|js}});
+        lines.push("END:VCARD");
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/vcard" }));
+        link.download = {{slug|js}} + ".vcf";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      });
+    </script>
+
+    <script>
+      const LAZU_PROFILE_ID = "{{slug}}";
+      const LAZU_ENDPOINT = "https://app.lazu.bio/api/track";
+      /* LAZU-TRACKER:START */
+      /* LAZU-TRACKER:END */
+    </script>
+  </body>
+</html>

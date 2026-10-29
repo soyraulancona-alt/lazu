@@ -1,4 +1,4 @@
-/*! LAZU standalone tracker v1 · sin dependencias · https://lazu.bio */
+/*! LAZU standalone tracker v2 · sin dependencias · https://lazu.bio */
 (function () {
   "use strict";
 
@@ -7,6 +7,11 @@
   var ENDPOINT =
     typeof LAZU_ENDPOINT !== "undefined" ? String(LAZU_ENDPOINT) : "https://app.lazu.bio/api/track";
   var AUTO_PAGE_VIEW = typeof LAZU_AUTO_PAGE_VIEW !== "undefined" ? !!LAZU_AUTO_PAGE_VIEW : true;
+  // Formularios de contacto: por defecto, el mismo servidor que el tracking.
+  var LEADS_ENDPOINT =
+    typeof LAZU_LEADS_ENDPOINT !== "undefined"
+      ? String(LAZU_LEADS_ENDPOINT)
+      : ENDPOINT.replace(/\/api\/track\/?$/, "/api/leads");
 
   var STORAGE_KEY = "lazu_session_id";
   var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
@@ -139,6 +144,69 @@
 
   document.addEventListener("click", onClick, true);
   document.addEventListener("auxclick", onClick, true);
+
+  // Formulario de contacto: <form data-lazu-lead> con campos name, phone, email,
+  // company, message y la casilla consent. El tracker lo envía a LAZU y marca el
+  // estado en data-lazu-state ("sending", "sent", "error") para que el diseño lo muestre.
+  function setLeadState(form, state) {
+    form.setAttribute("data-lazu-state", state);
+    try {
+      form.dispatchEvent(new CustomEvent("lazu:lead", { detail: { state: state }, bubbles: true }));
+    } catch {
+      /* navegadores sin CustomEvent: el atributo basta */
+    }
+  }
+
+  function onSubmit(e) {
+    var form = e.target && e.target.closest ? e.target.closest("form[data-lazu-lead]") : null;
+    if (!form) return;
+    e.preventDefault();
+    if (!PROFILE || form.getAttribute("data-lazu-state") === "sending") return;
+    function value(name) {
+      var el = form.elements.namedItem(name);
+      return el && typeof el.value === "string" ? el.value.slice(0, 1000) : "";
+    }
+    var consent = form.elements.namedItem("consent");
+    var body = {
+      profile: PROFILE,
+      name: value("name"),
+      phone: value("phone"),
+      email: value("email"),
+      company: value("company"),
+      message: value("message"),
+      consent: !!(consent && consent.checked),
+      website: value("website"),
+    };
+    var version = form.getAttribute("data-lazu-consent-version");
+    if (version) body.consentVersion = version;
+    setLeadState(form, "sending");
+    fetch(LEADS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      mode: "cors",
+      credentials: "omit",
+    })
+      .then(function (res) {
+        return res.json().then(
+          function (data) {
+            return res.ok && data && data.success === true;
+          },
+          function () {
+            return false;
+          },
+        );
+      })
+      .then(function (ok) {
+        if (ok) form.reset();
+        setLeadState(form, ok ? "sent" : "error");
+      })
+      .catch(function () {
+        setLeadState(form, "error");
+      });
+  }
+
+  document.addEventListener("submit", onSubmit, true);
 
   window.lazuTrack = lazuTrack;
 

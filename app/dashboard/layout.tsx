@@ -9,14 +9,14 @@ async function UserMenu() {
   if (!user) return null;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="hidden text-white/80 sm:inline">
+      <Link href="/dashboard/account" className="hidden text-white/80 hover:text-white sm:inline">
         {user.name}
         {user.role === "ADMIN" ? (
           <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-            admin
+            LAZU
           </span>
         ) : null}
-      </span>
+      </Link>
       <form action={logout}>
         <button
           type="submit"
@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
             </Link>
             <nav className="text-sm">
               <Link href="/dashboard" className="text-white/80 hover:text-white">
-                Resumen
+                Empresas
               </Link>
             </nav>
           </div>
