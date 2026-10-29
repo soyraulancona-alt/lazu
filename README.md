@@ -170,6 +170,8 @@ npm run build
 
 En cada despliegue, el script `vercel-build` aplica las migraciones (`prisma migrate deploy`), ejecuta el seed (idempotente: crea el admin y `test-profile` solo si no existen) y compila. Los HTML servidos por la propia app (como `/test-profile.html`) siempre pueden enviar eventos, sin añadir su dominio a `ALLOWED_ORIGINS`.
 
+**¿Olvidaste la contraseña del administrador?** En Vercel → Settings → Environment Variables: pon una contraseña nueva (≥ 10 caracteres) en `SEED_ADMIN_PASSWORD`, añade `SEED_ADMIN_RESET_PASSWORD` = `true` y haz **Redeploy**. Entra con `SEED_ADMIN_EMAIL` y la nueva contraseña, y después borra `SEED_ADMIN_RESET_PASSWORD` (si se queda, cada despliegue vuelve a imponer esa contraseña).
+
 Para usar `app.lazu.bio`: Vercel → Settings → Domains → añade `app.lazu.bio` y crea en tu DNS el registro CNAME que Vercel indique.
 
 ### Servidor propio (VPS)

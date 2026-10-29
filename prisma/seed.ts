@@ -25,9 +25,12 @@ async function main() {
   }
   const baseUrl = (process.env.CARD_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
+  // SEED_ADMIN_RESET_PASSWORD=true restablece la contraseña del admin con SEED_ADMIN_PASSWORD
+  // (para recuperar el acceso). Quítala después: si se queda, cada despliegue la vuelve a imponer.
+  const resetPassword = process.env.SEED_ADMIN_RESET_PASSWORD === "true";
   const admin = await prisma.user.upsert({
     where: { email },
-    update: {},
+    update: resetPassword ? { role: "ADMIN", passwordHash: await bcrypt.hash(password, 12) } : {},
     create: {
       email,
       name: "Administrador LAZU",
@@ -71,7 +74,7 @@ async function main() {
     console.log(`✔ Tarjeta: ${baseUrl}/c/${code}`);
   }
 
-  console.log(`✔ Admin: ${admin.email}`);
+  console.log(`✔ Admin: ${admin.email}${resetPassword ? " (contraseña restablecida)" : ""}`);
   console.log(`✔ Empresa: ${org.slug}`);
   console.log(`✔ Perfil: ${profile.slug} (${profile.status})`);
 }
